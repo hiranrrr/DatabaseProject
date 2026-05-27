@@ -1,0 +1,120 @@
+
+import sqlite3
+from pathlib import Path
+from engine.schema_builder import TableSchema
+
+# SQLite veritabanı bağlantısını yönetir.CREATE TABLE ve INSERT INTO sorgularını çalıştırır.Tüm sistem bu modül üzerinden veritabanıyla konuşur.
+
+class DatabaseManager:
+    # Veritabanı dosya yolu ve bağlantı nesneleri
+    def __init__(self, db_path: str = "output.db"):
+        
+        self.db_path = db_path
+        self.conn: sqlite3.Connection = None
+        self.cursor: sqlite3.Cursor = None
+
+        # Veritabanına bağlanır dosya yoksa SQLite otomatik oluşturur
+        # PRAGMA ile Foreign Key kısıtları aktif olur
+    def connect(self):
+        
+        self.conn = sqlite3.connect(self.db_path)
+        self.conn.execute("PRAGMA foreign_keys = ON")
+        self.cursor = self.conn.cursor()
+
+    #baglantiyi kapatir
+    def close(self):
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+            self.cursor = None
+
+    # Veritabanındaki butun tabloları siler
+    def reset(self):
+        
+        if not self.conn:
+            self.connect()
+
+        self.cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+        tables = [row[0] for row in self.cursor.fetchall()]
+
+        self.conn.execute("PRAGMA foreign_keys = OFF")
+        for table in tables:
+            self.cursor.execute(f'DROP TABLE IF EXISTS "{table}"')
+        self.conn.execute("PRAGMA foreign_keys = ON")
+        self.conn.commit()
+
+    #tablo olusturma
+    def create_tables(self, schemas: list[TableSchema]):
+        if not self.conn:
+            self.connect()
+
+        for schema in schemas:
+            sql = schema.to_create_sql()
+            self.cursor.execute(sql)
+
+        self.conn.commit()
+
+    def insert_all(self, insert_ops: list[tuple[str, dict]]) -> dict[int, int]:
+        if not self.conn:
+            self.connect()
+
+        id_map: dict[int, int] = {}
+
+        for index, (table_name, row_data) in enumerate(insert_ops):
+
+            resolved_row = {}
+            for col, val in row_data.items():
+                if col.endswith("_id") and isinstance(val, int) and val in id_map:
+                    resolved_row[col] = id_map[val]
+                else:
+                    resolved_row[col] = val
+
+            if not resolved_row:
+                self.cursor.execute(f'INSERT INTO "{table_name}" DEFAULT VALUES')
+            else:
+                columns = ", ".join(f'"{c}"' for c in resolved_row.keys())
+                placeholders = ", ".join("?" for _ in resolved_row)
+                values = list(resolved_row.values())
+                self.cursor.execute(
+                    f'INSERT INTO "{table_name}" ({columns}) VALUES ({placeholders})',
+                    values
+                )
+
+            id_map[index] = self.cursor.lastrowid
+
+        self.conn.commit()
+        return id_map
+    
+    # Veritabanındaki tüm tablo adlarını döndürür tablo adi secmek icin ui da
+    def get_all_tables(self) -> list[str]:
+        
+        if not self.conn:
+            self.connect()
+
+        self.cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+        return [row[0] for row in self.cursor.fetchall()]
+    
+    # Seçilen tablonun tüm sütun ve satırlarını döndürür
+    def get_table_data(self, table_name: str) -> tuple[list[str], list[tuple]]:
+        
+        if not self.conn:
+            self.connect()
+
+        self.cursor.execute(f'SELECT * FROM "{table_name}"')
+        columns = [desc[0] for desc in self.cursor.description]
+        rows = self.cursor.fetchall()
+        return columns, rows
+    
+    # Tablonun CREATE TABLE SQL'ini döndürür ui daki kisim icin
+    def get_table_schema_sql(self, table_name: str) -> str:
+       
+        self.cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+            (table_name,)
+        )
+        result = self.cursor.fetchone()
+        return result[0] if result else ""
