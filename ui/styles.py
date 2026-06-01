@@ -1,14 +1,6 @@
-"""
-styles.py
----------
-Uygulamadaki tüm renk sabitleri ve ttk stil tanımları bu dosyada tutulur.
-Herhangi bir rengi değiştirmek istersen sadece buraya bakman yeterli.
-"""
-
 import tkinter as tk
 from tkinter import ttk
 
-# ── Renk Paleti ──────────────────────────────────────────────────────────────
 BG_DARK   = "#1e1e2e"
 BG_PANEL  = "#2a2a3e"
 BG_WIDGET = "#313145"
@@ -23,10 +15,7 @@ BORDER    = "#45475a"
 
 
 def apply(root: tk.Tk):
-    """
-    ttk stillerini uygulamaya uygular.
-    main.py içinde App.__init__ tarafından bir kez çağrılır.
-    """
+
     style = ttk.Style(root)
     style.theme_use("clam")
 

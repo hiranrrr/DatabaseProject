@@ -1,18 +1,3 @@
-"""
-main.py
--------
-Uygulamanın giriş noktası.
-
-Bu dosyanın TEK sorumluluğu:
-    - Tkinter penceresini oluşturmak
-    - 3 panel widget'ını yerleştirmek
-    - Paneller arası callback'leri bağlamak (orchestration)
-    - Dönüşüm iş akışını koordine etmek
-
-GUI detayları  → ui/json_panel.py, ui/control_panel.py, ui/sql_panel.py
-Stil detayları → ui/styles.py
-"""
-
 import sys
 import os
 
@@ -32,11 +17,6 @@ from database.db_manager   import DatabaseManager
 
 
 class App(tk.Tk):
-    """
-    Ana uygulama penceresi.
-    Panelleri oluşturur ve aralarındaki veri akışını yönetir.
-    """
-
     def __init__(self):
         super().__init__()
         self.title("NoSQL → SQL Dönüşüm Sistemi")
@@ -49,8 +29,6 @@ class App(tk.Tk):
         styles.apply(self)
         self._build_header()
         self._build_panels()
-
-    # ── Arayüz kurulumu ──────────────────────────────────────────────────
 
     def _build_header(self):
         header = tk.Frame(self, bg=styles.ACCENT, height=48)
@@ -73,7 +51,6 @@ class App(tk.Tk):
         content.columnconfigure(2, weight=7, minsize=420)   # SQL paneli
         content.rowconfigure(0, weight=1)
 
-        # Sol: JSON Panel
         self.json_panel = JsonPanel(
             content,
             on_loaded=self._on_json_loaded,
@@ -81,7 +58,6 @@ class App(tk.Tk):
         )
         self.json_panel.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
 
-        # Orta: Kontrol Panel
         self.control_panel = ControlPanel(
             content,
             on_convert=self._on_convert,
@@ -89,14 +65,12 @@ class App(tk.Tk):
         )
         self.control_panel.grid(row=0, column=1, sticky="nsew", padx=6)
 
-        # Sağ: SQL Panel
         self.sql_panel = SqlPanel(
             content,
-            on_table_select=self._on_table_selected
+            on_table_select=self._on_table_selected,
+            on_query_run   =self._on_query_run
         )
         self.sql_panel.grid(row=0, column=2, sticky="nsew", padx=(6, 0))
-
-    # ── Callback'ler ─────────────────────────────────────────────────────
 
     def _on_json_loaded(self, data, filepath: str):
         fname = os.path.basename(filepath)
@@ -125,7 +99,6 @@ class App(tk.Tk):
 
             self.control_panel.log("─" * 32, "info")
 
-            # Önceki dönüşümü temizle — duplicate önleme
             self.db.connect()
             self.db.reset()
             self.sql_panel.clear()
@@ -177,6 +150,14 @@ class App(tk.Tk):
             self.sql_panel.show_schema_sql(schema_sql)
         except Exception as e:
             self.control_panel.log(f"❌ Tablo gösterme hatası: {e}", "error")
+
+    def _on_query_run(self, sql: str):
+        # Kullanıcının yazdığı SQL sorgusunu çalıştırır, sonucu panelde gösterir
+        try:
+            columns, rows = self.db.execute_query(sql)
+            self.sql_panel.show_query_result(columns, rows)
+        except Exception as e:
+            self.sql_panel.show_query_error(str(e))
 
     def _sanitize(self, name: str) -> str:
         import re
